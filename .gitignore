@@ -6,5 +6,9 @@ dist/
 build/
 .env
 stockbot_config.json
+stockbot_data/
+stockbot_cache/
 .venv/
 venv/
+.pytest_cache/
+*.parquet

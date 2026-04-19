@@ -27,7 +27,7 @@ class Position:
 class SimulatedBroker:
     cash: float
     positions: Dict[str, Position] = field(default_factory=dict)
-    commission_per_trade: float = 0.0  # flat fee per trade
+    commission_per_trade: float = 0.0
 
     def buy(self, symbol: str, price: float, qty: float) -> None:
         cost = price * qty + self.commission_per_trade
@@ -55,11 +55,7 @@ class SimulatedBroker:
 
 
 class AlpacaBroker:
-    """Live/paper trading via Alpaca API.
-
-    Requires ALPACA_API_KEY and ALPACA_API_SECRET env vars,
-    or pass them to the constructor.
-    """
+    """Live/paper trading via Alpaca API with market, limit, and stop orders."""
 
     def __init__(
         self,
@@ -95,35 +91,50 @@ class AlpacaBroker:
         )
         self.paper = paper
 
-    def buy(self, symbol: str, qty: float, side: str = "buy") -> dict:
-        order = self.api.submit_order(
-            symbol=symbol,
-            qty=qty,
-            side="buy",
-            type="market",
-            time_in_force="day",
-        )
+    def buy(self, symbol: str, qty: float, order_type: str = "market", limit_price: Optional[float] = None) -> dict:
+        kwargs = {
+            "symbol": symbol,
+            "qty": qty,
+            "side": "buy",
+            "type": order_type,
+            "time_in_force": "day",
+        }
+        if order_type == "limit" and limit_price:
+            kwargs["limit_price"] = str(limit_price)
+        order = self.api.submit_order(**kwargs)
         return {
             "id": order.id,
             "symbol": order.symbol,
             "qty": float(order.qty),
             "side": order.side,
+            "type": order.type,
             "status": order.status,
         }
 
-    def sell(self, symbol: str, qty: float) -> dict:
-        order = self.api.submit_order(
-            symbol=symbol,
-            qty=qty,
-            side="sell",
-            type="market",
-            time_in_force="day",
-        )
+    def sell(self, symbol: str, qty: float, order_type: str = "market", limit_price: Optional[float] = None, stop_price: Optional[float] = None) -> dict:
+        kwargs = {
+            "symbol": symbol,
+            "qty": qty,
+            "side": "sell",
+            "type": order_type,
+            "time_in_force": "day",
+        }
+        if order_type == "limit" and limit_price:
+            kwargs["limit_price"] = str(limit_price)
+        if order_type == "stop" and stop_price:
+            kwargs["stop_price"] = str(stop_price)
+            kwargs["type"] = "stop"
+        if order_type == "stop_limit" and limit_price and stop_price:
+            kwargs["limit_price"] = str(limit_price)
+            kwargs["stop_price"] = str(stop_price)
+            kwargs["type"] = "stop_limit"
+        order = self.api.submit_order(**kwargs)
         return {
             "id": order.id,
             "symbol": order.symbol,
             "qty": float(order.qty),
             "side": order.side,
+            "type": order.type,
             "status": order.status,
         }
 
@@ -141,3 +152,11 @@ class AlpacaBroker:
     def equity(self, market_prices: Optional[dict] = None) -> float:
         account = self.api.get_account()
         return float(account.equity)
+
+    def cancel_all_orders(self, symbol: Optional[str] = None) -> None:
+        if symbol:
+            orders = self.api.list_orders(status="open", symbols=[symbol])
+            for order in orders:
+                self.api.cancel_order(order.id)
+        else:
+            self.api.cancel_all_orders()

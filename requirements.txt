@@ -5,3 +5,6 @@ scikit-learn
 streamlit
 plotly
 alpaca-trade-api
+pytest
+pyarrow
+fastparquet
